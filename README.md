@@ -1,9 +1,10 @@
-// Get All Todo
+**// Get All Todo**
 
 curl --location 'http://localhost:3000/todos'
 
 
-// Create Todo
+
+**// Create Todo**
 
 curl --location 'http://localhost:3000/todos' \
 --header 'Content-Type: application/json' \
@@ -14,11 +15,14 @@ curl --location 'http://localhost:3000/todos' \
 }'
 
 
-// Get Detail Todo
+
+**// Get Detail Todo**
 
 curl --location 'http://localhost:3000/todos/0c17c55e-8438-4571-9f52-5bd2f3210582'
 
-// Update Todo
+
+
+**// Update Todo**
 
 curl --location --request PUT 'http://localhost:3000/todos/e7b4a154-ee28-437d-931e-d8c64f76687f' \
 --header 'Content-Type: application/json' \
@@ -29,9 +33,12 @@ curl --location --request PUT 'http://localhost:3000/todos/e7b4a154-ee28-437d-93
 }'
 
 
-// Delete Todo
+
+**// Delete Todo**
 
 curl --location --request DELETE 'http://localhost:3000/todos/e7b4a154-ee28-437d-931e-d8c64f76687f'
 
-// Patch Todo
+
+
+**// Patch Todo**
 curl --location --request PATCH 'http://localhost:3000/todos/0c17c55e-8438-4571-9f52-5bd2f3210582/flag-done'
