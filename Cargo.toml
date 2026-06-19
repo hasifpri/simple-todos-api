@@ -1,0 +1,10 @@
+[package]
+name = "todo-list-be"
+version = "0.1.0"
+edition = "2024"
+
+[dependencies]
+axum = { version =  "0.8.9", features = ["json"] }
+serde = { version = "1.0.228", features = ["derive"] }
+tokio = { version = "1.52.3", features = ["full"] }
+uuid = { version =  "1.11.0", features = ["v4", "serde"] }
