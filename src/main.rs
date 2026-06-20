@@ -2,16 +2,20 @@ use axum::Router;
 use axum::routing::{delete, get, patch, post, put};
 
 mod models;
-mod store;
 mod handlers;
+mod entities;
+mod database;
+mod auth;
+mod middleware;
+mod helper;
 
 #[tokio::main]
 async fn main() {
 
     // create store
-    let store = store::new_store();
+    let store = database::connect().await;
 
-    // generate route
+    // generate route todos
     let app = Router::new()
         .route("/todos", get(handlers::get_todos))
         .route("/todos", post(handlers::create_todo))
@@ -19,6 +23,8 @@ async fn main() {
         .route("/todos/{id}", put(handlers::update_todo))
         .route("/todos/{id}", delete(handlers::delete_todo))
         .route("/todos/{id}/flag-done", patch(handlers::flag_done_todo))
+        .route("/auth/register", post(auth::register_user))
+        .route("/auth/login", post(auth::login_user))
         .with_state(store);
 
     // run server

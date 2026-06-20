@@ -1,103 +1,195 @@
 use axum::extract::{Path, State};
 use axum::http::StatusCode;
 use axum::Json;
+use chrono::Utc;
+use sea_orm::{ActiveModelTrait, DatabaseConnection, Iden};
 use uuid::Uuid;
-use crate::models::{DataTodo, Todo};
-use crate::store::TodoStore;
+use crate::entities::prelude::Todos;
+use crate::models::{ApiResponse, DataTodo};
+use sea_orm::EntityTrait;
+use crate::entities::todos;
+use sea_orm::ActiveValue::Set;
+use sea_orm::sqlx::types::chrono;
+use crate::middleware::AuthGuard;
 
 pub async fn get_todos(
-    State(store): State<TodoStore>
-) -> Json<Vec<Todo>> {
-    let store = store.lock().unwrap();
+    State(store): State<DatabaseConnection>,
+    auth: AuthGuard,
+) -> (StatusCode, Json<ApiResponse<Vec<todos::Model>>>) {
 
-    let todos: Vec<Todo> = store.values().cloned().collect();
+    // get time in
+    let t_in = Utc::now();
 
-    Json(todos)
+    let result = Todos::find()
+        .all(&store)
+        .await;
+
+    match result {
+        Ok(data) => {
+            (StatusCode::OK, Json(ApiResponse::success(t_in, StatusCode::OK.as_u16(), data)))
+        },
+        Err(err) => {
+            (StatusCode::INTERNAL_SERVER_ERROR, Json(ApiResponse::error(t_in, StatusCode::INTERNAL_SERVER_ERROR.as_u16(), err.to_string())))
+        }
+    }
 }
 
 pub async fn create_todo(
-    State(store): State<TodoStore>,
+    State(store): State<DatabaseConnection>,
+    auth: AuthGuard,
     Json(body): Json<DataTodo>,
-) -> (StatusCode, Json<Todo>) {
+) -> (StatusCode, Json<ApiResponse<todos::Model>>) {
+
+    // get time in
+    let t_in = Utc::now();
 
     // generate uuid
     let uuid = Uuid::new_v4();
 
-    let todo = Todo{
-        id: uuid,
-        title: body.title,
-        description: body.description,
-        is_completed: false,
+    // generate db
+    let new_todo = todos::ActiveModel{
+        id: Set(uuid),
+        title: Set(body.title),
+        description: Set(body.description),
+        is_completed: Set(false),
+        created_at: Set(chrono::Utc::now().into()),
+        updated_at: Set(chrono::Utc::now().into()),
     };
 
-    let mut db = store.lock().unwrap();
-    db.insert(uuid, todo.clone());
+    // insert
+    let result = new_todo.insert(&store).await;
 
-    (StatusCode::CREATED, Json(todo))
-    
+    match result {
+        Ok(data) => {
+
+            (StatusCode::CREATED, Json(ApiResponse::success(t_in, StatusCode::OK.as_u16(), data)))
+        },
+        Err(err)=> {
+            (StatusCode::INTERNAL_SERVER_ERROR, Json(ApiResponse::error(t_in, StatusCode::INTERNAL_SERVER_ERROR.as_u16(), err.to_string())))
+        }
+    }
+
 }
 
 pub async fn delete_todo(
-    State(store): State<TodoStore>,
+    State(store): State<DatabaseConnection>,
+    auth: AuthGuard,
     Path(id): Path<Uuid>,
-) -> StatusCode {
-    let mut db = store.lock().unwrap();
+) -> (StatusCode, Json<ApiResponse<()>>) {
 
-    match db.remove(&id) {
-        Some(_) => StatusCode::NO_CONTENT,
-        None => StatusCode::NOT_FOUND
+    let t_in = Utc::now();
+
+    let result = Todos::find_by_id(id).one(&store).await;
+
+    match result {
+        Ok(Some(data)) => {
+            let active: todos::ActiveModel = data.into();
+
+            match active.delete(&store).await {
+                Ok(_) => (StatusCode::NO_CONTENT, Json(ApiResponse::success(t_in, StatusCode::NO_CONTENT.as_u16(), ()))),
+                Err(err) => (StatusCode::INTERNAL_SERVER_ERROR, Json(ApiResponse::error(t_in, StatusCode::INTERNAL_SERVER_ERROR.as_u16(), err.to_string()))),
+            }
+        },
+        Ok(None) => (StatusCode::NOT_FOUND, Json(ApiResponse::error(t_in, StatusCode::NOT_FOUND.as_u16(), "data not found".to_string()))),
+        Err(err) => (StatusCode::INTERNAL_SERVER_ERROR, Json(ApiResponse::error(t_in, StatusCode::INTERNAL_SERVER_ERROR.as_u16(), err.to_string()))),
     }
 }
 
 pub async fn find_todo(
-    State(store): State<TodoStore>,
+    State(store): State<DatabaseConnection>,
+    auth: AuthGuard,
     Path(id): Path<Uuid>,
-) -> (StatusCode, Json<Option<Todo>>) {
-    let db = store.lock().unwrap();
+) -> (StatusCode, Json<ApiResponse<todos::Model>>) {
 
-    match db.get(&id) {
-        Some(data) => (StatusCode::OK, Json(Some(data.clone()))),
-        None => (StatusCode::NOT_FOUND, Json(None))
+    let t_in = Utc::now();
+
+    // get data
+    let data_selected = Todos::find_by_id(id).one(&store).await;
+
+    match data_selected {
+        Ok(Some(data)) => {
+            (StatusCode::OK, Json(ApiResponse::success(t_in, StatusCode::OK.as_u16(), data)))
+        },
+        Ok(None) => {
+            (StatusCode::NOT_FOUND, Json(ApiResponse::error(t_in, StatusCode::NOT_FOUND.as_u16(), "data not found".to_string())))
+        },
+        Err(err) => {
+            (StatusCode::INTERNAL_SERVER_ERROR, Json(ApiResponse::error(t_in, StatusCode::INTERNAL_SERVER_ERROR.as_u16(), err.to_string())))
+        },
     }
 }
 
 pub async fn update_todo(
-    State(store): State<TodoStore>,
+    State(store): State<DatabaseConnection>,
+    auth: AuthGuard,
     Path(id): Path<Uuid>,
     Json(body): Json<DataTodo>,
-) -> (StatusCode, Json<Option<Todo>>) {
-    let mut db = store.lock().unwrap();
+) -> (StatusCode, Json<ApiResponse<todos::Model>>) {
 
-    match db.get_mut(&id) {
-        Some(data) => {
+    let t_in = Utc::now();
 
-            data.title = body.title;
-            data.description = body.description;
-            data.is_completed = body.is_completed;
 
-            (StatusCode::OK, Json(Some(data.clone())))
+    // find data
+    let data_selected = Todos::find_by_id(id).one(&store).await;
+
+    match data_selected {
+        Ok(Some( data)) => {
+
+            // set data active
+            let mut data_active: todos::ActiveModel = data.into();
+
+            // update data
+            data_active.title = Set(body.title);
+            data_active.description = Set(body.description);
+            data_active.is_completed = Set(body.is_completed);
+            data_active.updated_at = Set(Utc::now().into());
+
+            // exec update
+            let result = data_active.update(&store).await;
+
+            match result {
+                Ok(data) => (StatusCode::OK, Json(ApiResponse::success(t_in, StatusCode::OK.as_u16(), data))),
+                Err(err) => (StatusCode::INTERNAL_SERVER_ERROR, Json(ApiResponse::error(t_in, StatusCode::INTERNAL_SERVER_ERROR.as_u16(), err.to_string())))
+            }
+
+        },
+        Ok(None) => {
+            (StatusCode::NOT_FOUND, Json(ApiResponse::error(t_in, StatusCode::NOT_FOUND.as_u16(), "data not found".to_string())))
+        },
+        Err(err) => {
+            (StatusCode::INTERNAL_SERVER_ERROR, Json(ApiResponse::error(t_in, StatusCode::INTERNAL_SERVER_ERROR.as_u16(), err.to_string())))
         }
-        None => (StatusCode::NOT_FOUND, Json(None))
     }
 
 }
 
 pub async fn flag_done_todo(
-    State(store): State<TodoStore>,
+    State(store): State<DatabaseConnection>,
+    auth: AuthGuard,
     Path(id): Path<Uuid>,
-) -> (StatusCode, Json<Option<Todo>>) {
-    
-    // get mutex db
-    let mut db = store.lock().unwrap();
+) -> (StatusCode, Json<Option<todos::Model>>) {
 
-    match db.get_mut(&id) {
-        Some(data) => {
-            data.is_completed = true;
+    // get single data
+    let single_data = Todos::find_by_id(id).one(&store).await;
 
-            (StatusCode::OK, Json(Some(data.clone())))
+    match single_data {
+        Ok(Some(data)) => {
+            let mut data_active: todos::ActiveModel = data.into();
+
+            // flag done
+            data_active.is_completed = Set(true);
+            data_active.updated_at = Set(chrono::Utc::now().into());
+
+            // exec update
+            let result_exec = data_active.update(&store).await;
+
+            match result_exec {
+                Ok(data) => (StatusCode::OK, Json(Some(data))),
+                Err(_) => (StatusCode::INTERNAL_SERVER_ERROR, Json(None))
+            }
         },
-        None => {
-            (StatusCode::NOT_FOUND, Json(None))
-        }
+        Ok(None) => (StatusCode::NOT_FOUND, Json(None)),
+        Err(_) => (StatusCode::INTERNAL_SERVER_ERROR, Json(None)),
     }
+
 }
