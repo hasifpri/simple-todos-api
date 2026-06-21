@@ -1,8 +1,10 @@
 use axum::extract::FromRequestParts;
 use axum::http::request::Parts;
 use axum::http::StatusCode;
+use chrono::Utc;
 use jsonwebtoken::{decode, DecodingKey, Validation};
-use crate::models::Claims;
+use axum::Json;
+use crate::models::{ApiResponse, Claims};
 
 pub struct AuthGuard {
     pub user_id: String,
@@ -14,30 +16,42 @@ impl<S> FromRequestParts<S> for AuthGuard
 where
     S: Send + Sync,
 {
-    type Rejection = StatusCode;
+    type Rejection = (StatusCode, Json<ApiResponse<()>>);
 
     async fn from_request_parts(parts: &mut Parts, state: &S) -> Result<Self, Self::Rejection> {
 
+        let t_in = Utc::now();
+
         // get header
-        let auth_header = parts.headers.get("Authorization").ok_or(StatusCode::UNAUTHORIZED)?;
+        let auth_header = parts.headers.get("Authorization");
 
-        // get token
-        let token = auth_header.to_str().unwrap().replace("Bearer ", "");
+        match auth_header {
+            Some(data) => {
 
-        // generate jwt
-        let jwt_key = std::env::var("JWT_KEY").unwrap();
+                // get token
+                let token = data.to_str().unwrap().replace("Bearer ", "");
 
-        // decode
-        let decoded = decode::<Claims>(
-            &token,
-            &DecodingKey::from_secret(jwt_key.as_bytes()),
-            &Validation::default(),
-        ).map_err(|_| { StatusCode::UNAUTHORIZED })?;
+                // generate jwt
+                let jwt_key = std::env::var("JWT_KEY").unwrap();
 
-        Ok(AuthGuard {
-            user_id: decoded.claims.sub,
-            name: decoded.claims.name,
-            username: decoded.claims.username,
-        })
+                // decode
+                let decoded = decode::<Claims>(
+                    &token,
+                    &DecodingKey::from_secret(jwt_key.as_bytes()),
+                    &Validation::default(),
+                ).map_err(|_| (
+                    StatusCode::UNAUTHORIZED,
+                    Json(ApiResponse::error(t_in, StatusCode::UNAUTHORIZED.as_u16(), "invalid or expired token".to_string()))
+                ))?;
+
+                Ok(AuthGuard {
+                    user_id: decoded.claims.sub,
+                    name: decoded.claims.name,
+                    username: decoded.claims.username,
+                })
+
+            },
+            None => return Err( (StatusCode::UNAUTHORIZED, Json(ApiResponse::error(t_in, StatusCode::UNAUTHORIZED.as_u16(), "token is required".to_string()))))
+        }
     }
 }

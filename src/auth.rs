@@ -6,16 +6,23 @@ use chrono::{Duration, Utc};
 use jsonwebtoken::{encode, EncodingKey, Header};
 use sea_orm::{ActiveModelTrait, ColumnTrait, DatabaseConnection, EntityTrait, QueryFilter, Set};
 use uuid::Uuid;
+use validator::Validate;
 use crate::entities::prelude::Users;
 use crate::entities::users;
 use crate::entities::users::Column;
-use crate::models::{Claims, LoginUserReq, LoginUserResp, RegisterUserReq, RegisterUserResp};
-
+use crate::models::{ApiResponse, Claims, LoginUserReq, LoginUserResp, RegisterUserReq, RegisterUserResp};
 
 pub async fn register_user(
     State(store): State<DatabaseConnection>,
     Json(body): Json<RegisterUserReq>
-) -> (StatusCode, Json<Option<RegisterUserResp>>) {
+) -> (StatusCode, Json<ApiResponse<RegisterUserResp>>) {
+
+    let t_in = Utc::now();
+
+    // validate
+    if let Err(errors) = body.validate() {
+        return (StatusCode::BAD_REQUEST, Json(ApiResponse::error(t_in, StatusCode::BAD_REQUEST.as_u16(), errors.to_string())))
+    }
 
     // generate uuid
     let uuid = Uuid::new_v4();
@@ -28,9 +35,10 @@ pub async fn register_user(
         id: Set(uuid),
         name: Set(body.name),
         username: Set(body.username),
+        email: Set(body.email),
         password: Set(hashed_password),
-        created_at: Set(chrono::Utc::now().into()),
-        updated_at: Set(chrono::Utc::now().into()),
+        created_at: Set(Utc::now().into()),
+        updated_at: Set(Utc::now().into()),
     };
 
     // insert
@@ -45,11 +53,11 @@ pub async fn register_user(
                 username: data.username,
             };
 
-            (StatusCode::CREATED, Json(Some(users_resp)))
+            (StatusCode::CREATED, Json(ApiResponse::success(t_in, StatusCode::CREATED.as_u16(), users_resp)))
         }
-        Err(_) => {
+        Err(err) => {
 
-            (StatusCode::INTERNAL_SERVER_ERROR, Json(None))
+            (StatusCode::INTERNAL_SERVER_ERROR, Json(ApiResponse::error(t_in, StatusCode::INTERNAL_SERVER_ERROR.as_u16(), err.to_string())))
         }
     }
 
@@ -58,7 +66,13 @@ pub async fn register_user(
 pub async fn login_user(
     State(store): State<DatabaseConnection>,
     Json(body): Json<LoginUserReq>,
-) -> (StatusCode, Json<Option<LoginUserResp>>) {
+) -> (StatusCode, Json<ApiResponse<LoginUserResp>>) {
+
+    let t_in = Utc::now();
+    
+    if let Err(errors) =  body.validate() {
+        return (StatusCode::BAD_REQUEST, Json(ApiResponse::error(t_in, StatusCode::BAD_REQUEST.as_u16(), errors.to_string())))
+    }
 
     // get find
     let user_data = Users::find()
@@ -94,17 +108,17 @@ pub async fn login_user(
                     token: result,
                 };
 
-                return (StatusCode::OK, Json(Some(resp)))
+                return (StatusCode::OK, Json(ApiResponse::success(t_in, StatusCode::OK.as_u16(), resp)))
             }
 
-            (StatusCode::UNAUTHORIZED, Json(None))
+            (StatusCode::UNAUTHORIZED, Json(ApiResponse::error(t_in, StatusCode::UNAUTHORIZED.as_u16(), "username/password invalid".to_string())))
 
         },
         Ok(None) => {
-            (StatusCode::UNAUTHORIZED, Json(None))
+            (StatusCode::UNAUTHORIZED, Json(ApiResponse::error(t_in, StatusCode::OK.as_u16(), "username/password invalid".to_string())))
         },
-        Err(_) => {
-            (StatusCode::INTERNAL_SERVER_ERROR, Json(None))
+        Err(err) => {
+            (StatusCode::INTERNAL_SERVER_ERROR, Json(ApiResponse::error(t_in, StatusCode::OK.as_u16(), err.to_string())))
         }
     }
 

@@ -5,7 +5,7 @@ use chrono::Utc;
 use sea_orm::{ActiveModelTrait, DatabaseConnection, Iden};
 use uuid::Uuid;
 use crate::entities::prelude::Todos;
-use crate::models::{ApiResponse, DataTodo};
+use crate::models::{ApiResponse, CreateTodoReq, CreateTodoResp, FindTodoResp, FlagDoneTodoResp, UpdateTodoResp};
 use sea_orm::EntityTrait;
 use crate::entities::todos;
 use sea_orm::ActiveValue::Set;
@@ -37,8 +37,8 @@ pub async fn get_todos(
 pub async fn create_todo(
     State(store): State<DatabaseConnection>,
     auth: AuthGuard,
-    Json(body): Json<DataTodo>,
-) -> (StatusCode, Json<ApiResponse<todos::Model>>) {
+    Json(body): Json<CreateTodoReq>,
+) -> (StatusCode, Json<ApiResponse<CreateTodoResp>>) {
 
     // get time in
     let t_in = Utc::now();
@@ -52,8 +52,8 @@ pub async fn create_todo(
         title: Set(body.title),
         description: Set(body.description),
         is_completed: Set(false),
-        created_at: Set(chrono::Utc::now().into()),
-        updated_at: Set(chrono::Utc::now().into()),
+        created_at: Set(Utc::now().into()),
+        updated_at: Set(Utc::now().into()),
     };
 
     // insert
@@ -62,7 +62,17 @@ pub async fn create_todo(
     match result {
         Ok(data) => {
 
-            (StatusCode::CREATED, Json(ApiResponse::success(t_in, StatusCode::OK.as_u16(), data)))
+            // convert to resp
+            let resp = CreateTodoResp {
+                id: data.id,
+                title: data.title,
+                description: data.description,
+                is_completed: data.is_completed,
+                created_at: data.created_at,
+                updated_at: data.updated_at,
+            };
+
+            (StatusCode::CREATED, Json(ApiResponse::success(t_in, StatusCode::OK.as_u16(), resp)))
         },
         Err(err)=> {
             (StatusCode::INTERNAL_SERVER_ERROR, Json(ApiResponse::error(t_in, StatusCode::INTERNAL_SERVER_ERROR.as_u16(), err.to_string())))
@@ -99,7 +109,7 @@ pub async fn find_todo(
     State(store): State<DatabaseConnection>,
     auth: AuthGuard,
     Path(id): Path<Uuid>,
-) -> (StatusCode, Json<ApiResponse<todos::Model>>) {
+) -> (StatusCode, Json<ApiResponse<FindTodoResp>>) {
 
     let t_in = Utc::now();
 
@@ -108,7 +118,16 @@ pub async fn find_todo(
 
     match data_selected {
         Ok(Some(data)) => {
-            (StatusCode::OK, Json(ApiResponse::success(t_in, StatusCode::OK.as_u16(), data)))
+            let resp = FindTodoResp {
+                id: data.id,
+                title: data.title,
+                description: data.description,
+                is_completed: data.is_completed,
+                created_at: data.created_at,
+                updated_at: data.updated_at
+            };
+
+            (StatusCode::OK, Json(ApiResponse::success(t_in, StatusCode::OK.as_u16(), resp)))
         },
         Ok(None) => {
             (StatusCode::NOT_FOUND, Json(ApiResponse::error(t_in, StatusCode::NOT_FOUND.as_u16(), "data not found".to_string())))
@@ -123,8 +142,8 @@ pub async fn update_todo(
     State(store): State<DatabaseConnection>,
     auth: AuthGuard,
     Path(id): Path<Uuid>,
-    Json(body): Json<DataTodo>,
-) -> (StatusCode, Json<ApiResponse<todos::Model>>) {
+    Json(body): Json<CreateTodoReq>,
+) -> (StatusCode, Json<ApiResponse<UpdateTodoResp>>) {
 
     let t_in = Utc::now();
 
@@ -148,7 +167,13 @@ pub async fn update_todo(
             let result = data_active.update(&store).await;
 
             match result {
-                Ok(data) => (StatusCode::OK, Json(ApiResponse::success(t_in, StatusCode::OK.as_u16(), data))),
+                Ok(data) => {
+                    let resp = UpdateTodoResp {
+                        id: data.id
+                    };
+
+                    (StatusCode::OK, Json(ApiResponse::success(t_in, StatusCode::OK.as_u16(), resp)))
+                },
                 Err(err) => (StatusCode::INTERNAL_SERVER_ERROR, Json(ApiResponse::error(t_in, StatusCode::INTERNAL_SERVER_ERROR.as_u16(), err.to_string())))
             }
 
@@ -167,7 +192,8 @@ pub async fn flag_done_todo(
     State(store): State<DatabaseConnection>,
     auth: AuthGuard,
     Path(id): Path<Uuid>,
-) -> (StatusCode, Json<Option<todos::Model>>) {
+) -> (StatusCode, Json<ApiResponse<FlagDoneTodoResp>>) {
+    let t_in = Utc::now();
 
     // get single data
     let single_data = Todos::find_by_id(id).one(&store).await;
@@ -178,18 +204,23 @@ pub async fn flag_done_todo(
 
             // flag done
             data_active.is_completed = Set(true);
-            data_active.updated_at = Set(chrono::Utc::now().into());
+            data_active.updated_at = Set(Utc::now().into());
 
             // exec update
             let result_exec = data_active.update(&store).await;
 
             match result_exec {
-                Ok(data) => (StatusCode::OK, Json(Some(data))),
-                Err(_) => (StatusCode::INTERNAL_SERVER_ERROR, Json(None))
+                Ok(data) => {
+                    let resp = FlagDoneTodoResp {
+                        id: data.id
+                    };
+
+                    (StatusCode::OK, Json(ApiResponse::success(t_in, StatusCode::OK.as_u16(), resp)))
+                },
+                Err(err) => (StatusCode::INTERNAL_SERVER_ERROR, Json(ApiResponse::error(t_in, StatusCode::INTERNAL_SERVER_ERROR.as_u16(), err.to_string())))
             }
         },
-        Ok(None) => (StatusCode::NOT_FOUND, Json(None)),
-        Err(_) => (StatusCode::INTERNAL_SERVER_ERROR, Json(None)),
+        Ok(None) => (StatusCode::NOT_FOUND, Json(ApiResponse::error(t_in, StatusCode::NOT_FOUND.as_u16(), "data not found".to_string()))),
+        Err(err) => (StatusCode::INTERNAL_SERVER_ERROR, Json(ApiResponse::error(t_in, StatusCode::INTERNAL_SERVER_ERROR.as_u16(), err.to_string()))),
     }
-
 }

@@ -2,6 +2,7 @@ pub use sea_orm_migration::prelude::*;
 
 mod m20220101_000001_create_todos_table;
 mod m20260620_070836_create_users_table;
+mod m20260621_035326_add_email_to_users;
 
 pub struct Migrator;
 
@@ -11,6 +12,7 @@ impl MigratorTrait for Migrator {
         vec![
             Box::new(m20220101_000001_create_todos_table::Migration),
             Box::new(m20260620_070836_create_users_table::Migration),
+            Box::new(m20260621_035326_add_email_to_users::Migration),
         ]
     }
 }
