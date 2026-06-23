@@ -21,7 +21,15 @@ pub async fn register_user(
 
     // validate
     if let Err(errors) = body.validate() {
-        return (StatusCode::BAD_REQUEST, Json(ApiResponse::error(t_in, StatusCode::BAD_REQUEST.as_u16(), errors.to_string())))
+
+        let err_msg = errors
+            .field_errors()
+            .into_iter()
+            .map(|(_, e)| e[0].message.clone().unwrap_or_default())
+            .collect::<Vec<_>>()
+            .join(", ");
+
+        return (StatusCode::BAD_REQUEST, Json(ApiResponse::error(t_in, StatusCode::BAD_REQUEST.as_u16(), err_msg)))
     }
 
     // generate uuid
@@ -69,9 +77,17 @@ pub async fn login_user(
 ) -> (StatusCode, Json<ApiResponse<LoginUserResp>>) {
 
     let t_in = Utc::now();
-    
+
     if let Err(errors) =  body.validate() {
-        return (StatusCode::BAD_REQUEST, Json(ApiResponse::error(t_in, StatusCode::BAD_REQUEST.as_u16(), errors.to_string())))
+
+        let err_msg = errors
+            .field_errors()
+            .into_iter()
+            .map(|(_, e)| e[0].message.clone().unwrap_or_default())
+            .collect::<Vec<_>>()
+            .join(", ");
+
+        return (StatusCode::BAD_REQUEST, Json(ApiResponse::error(t_in, StatusCode::BAD_REQUEST.as_u16(), err_msg)))
     }
 
     // get find
@@ -115,7 +131,7 @@ pub async fn login_user(
 
         },
         Ok(None) => {
-            (StatusCode::UNAUTHORIZED, Json(ApiResponse::error(t_in, StatusCode::OK.as_u16(), "username/password invalid".to_string())))
+            (StatusCode::UNAUTHORIZED, Json(ApiResponse::error(t_in, StatusCode::UNAUTHORIZED.as_u16(), "username/password invalid".to_string())))
         },
         Err(err) => {
             (StatusCode::INTERNAL_SERVER_ERROR, Json(ApiResponse::error(t_in, StatusCode::OK.as_u16(), err.to_string())))

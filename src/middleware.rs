@@ -4,10 +4,11 @@ use axum::http::StatusCode;
 use chrono::Utc;
 use jsonwebtoken::{decode, DecodingKey, Validation};
 use axum::Json;
+use uuid::Uuid;
 use crate::models::{ApiResponse, Claims};
 
 pub struct AuthGuard {
-    pub user_id: String,
+    pub user_id: Uuid,
     pub name: String,
     pub username: String,
 }
@@ -45,7 +46,7 @@ where
                 ))?;
 
                 Ok(AuthGuard {
-                    user_id: decoded.claims.sub,
+                    user_id: Uuid::parse_str(&decoded.claims.sub).unwrap(),
                     name: decoded.claims.name,
                     username: decoded.claims.username,
                 })

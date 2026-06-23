@@ -89,6 +89,12 @@ pub struct Claims {
     pub exp: usize,
 }
 
+#[derive(Deserialize)]
+pub struct PaginationQuery {
+    pub page: Option<u64>,
+    pub size: Option<u64>,
+}
+
 #[derive(Serialize)]
 pub struct ApiResponse<T> {
     pub latency: String,
@@ -98,4 +104,22 @@ pub struct ApiResponse<T> {
     pub success: bool,
     pub status: u16,
     pub data: Option<T>,
+}
+
+#[derive(Serialize)]
+pub struct PaginationResp<T> {
+    pub list: T,
+    pub total: u64,
+    pub page: u64,
+    pub limit: u64,
+    pub total_pages: u64,
+}
+
+#[derive(Serialize)]
+pub struct GetTodoResp {
+    pub id: Uuid,
+    pub title: String,
+    pub description: String,
+    pub is_completed: bool,
+    pub created_at: DateTimeWithTimeZone,
 }
