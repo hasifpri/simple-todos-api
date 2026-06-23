@@ -25,6 +25,7 @@ async fn main() {
         .route("/todos/{id}/flag-done", patch(handlers::flag_done_todo))
         .route("/auth/register", post(auth::register_user))
         .route("/auth/login", post(auth::login_user))
+        .route("/auth/me", post(auth::me))
         .with_state(store);
 
     // run server

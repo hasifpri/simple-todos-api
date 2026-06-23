@@ -10,7 +10,8 @@ use validator::Validate;
 use crate::entities::prelude::Users;
 use crate::entities::users;
 use crate::entities::users::Column;
-use crate::models::{ApiResponse, Claims, LoginUserReq, LoginUserResp, RegisterUserReq, RegisterUserResp};
+use crate::middleware::AuthGuard;
+use crate::models::{ApiResponse, AuthMeResp, Claims, LoginUserReq, LoginUserResp, RegisterUserReq, RegisterUserResp};
 
 pub async fn register_user(
     State(store): State<DatabaseConnection>,
@@ -138,4 +139,19 @@ pub async fn login_user(
         }
     }
 
+}
+
+pub async fn me(
+    auth_guard: AuthGuard
+) -> (StatusCode, Json<ApiResponse<AuthMeResp>>) {
+
+    let t_in = Utc::now();
+
+    let resp = AuthMeResp {
+        user_id: auth_guard.user_id,
+        username: auth_guard.username,
+        name: auth_guard.name,
+    };
+
+    (StatusCode::OK, Json(ApiResponse::success(t_in, StatusCode::OK.as_u16(), resp)))
 }

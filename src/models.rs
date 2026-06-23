@@ -123,3 +123,10 @@ pub struct GetTodoResp {
     pub is_completed: bool,
     pub created_at: DateTimeWithTimeZone,
 }
+
+#[derive(Serialize)]
+pub struct AuthMeResp {
+    pub user_id: Uuid,
+    pub name: String,
+    pub username: String,
+}
